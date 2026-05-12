@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: job_automation
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  backend:
+    build: .
+    command: npm run backend
+    env_file: .env
+    environment:
+      DB_ENABLED: "true"
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/job_automation
+      OLLAMA_URL: http://ollama:11434
+    ports:
+      - "3001:3001"
+    depends_on:
+      - postgres
+      - redis
+      - ollama
+
+  playwright-worker:
+    build: .
+    command: npm run scheduler
+    env_file: .env
+    environment:
+      DB_ENABLED: "true"
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/job_automation
+      OLLAMA_URL: http://ollama:11434
+    depends_on:
+      - postgres
+      - redis
+      - ollama
+
+  dashboard:
+    image: node:22
+    working_dir: /app/dashboard
+    command: sh -c "npm install && npm run dev"
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:3001
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  ollama_data:

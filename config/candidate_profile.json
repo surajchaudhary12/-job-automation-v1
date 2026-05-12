@@ -1,0 +1,43 @@
+{
+  "name": "Suraj Singh",
+  "phone": "+91-7568910627",
+  "email": "surajsingh3454@gmail.com",
+  "linkedin": "",
+  "github": "",
+  "education": {
+    "institution": "National Institute of Technology Kurukshetra",
+    "degree": "B.Tech",
+    "major": "Electronics and Communication Engineering"
+  },
+  "current_company": "Meesho",
+  "title": "Analyst",
+  "current_ctc": "20 LPA",
+  "preferred_locations": ["Bangalore", "Gurgaon", "Remote"],
+  "positioning": "Backend engineer with strong DSA + scalable systems mindset.",
+  "skills": [
+    "Java",
+    "Spring Boot",
+    "C++",
+    "Node.js",
+    "REST APIs",
+    "MySQL",
+    "MongoDB",
+    "OOP",
+    "Data Structures",
+    "Algorithms",
+    "Backend Systems",
+    "Monitoring",
+    "Debugging",
+    "API Optimization"
+  ],
+  "achievements": [
+    "Codeforces Specialist (1634)",
+    "CodeChef 4 star (1850+)",
+    "Solved 800+ DSA problems"
+  ],
+  "metrics": {
+    "nmv": "+0.26% NMV",
+    "retention": "+1.3% retention",
+    "revenue": "+0.15% revenue"
+  }
+}

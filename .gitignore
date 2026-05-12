@@ -1,0 +1,15 @@
+node_modules/
+.env
+profiles/
+logs/
+.cache/
+*.log
+generated/*.aux
+generated/*.log
+generated/*.out
+.next/
+dashboard/.next/
+.aider*
+reports/
+test-profile*/
+.venv/

@@ -1,0 +1,15 @@
+{
+  "greenhouse_boards": [
+    "razorpay",
+    "meesho",
+    "groww",
+    "cred"
+  ],
+  "lever_companies": [
+    "postman",
+    "atlan",
+    "browserstack"
+  ],
+  "locations": ["Bangalore", "Gurgaon", "Remote"],
+  "queries": ["backend engineer", "java backend engineer", "platform engineer", "software engineer backend"]
+}

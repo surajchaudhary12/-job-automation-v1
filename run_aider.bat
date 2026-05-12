@@ -1,0 +1,3 @@
+@echo off
+echo Starting Aider with Ollama model (qwen2.5-coder:14b)...
+python -m aider --model ollama/qwen2.5-coder:14b %*
