@@ -1,4 +1,15 @@
-const GEMINI_API_KEY = "AIzaSyAimV_yClFfONvnlNj-WlVSxzXvi2sGiY4";
+const fs = require("fs");
+const path = require("path");
+const crypto = require("crypto");
+const { candidateProfile, rootDir } = require("../config");
+const { log } = require("../logging/logger");
+
+const DEFAULT_MODEL = "qwen2.5-coder:14b";
+const FALLBACK_MODELS = ["llama3.1", "deepseek-coder", "mistral"];
+
+function enabled() {
+  return String(process.env.OLLAMA_ENABLED || "true").toLowerCase() !== "false";
+}
 
 function ollamaUrl() {
   return process.env.OLLAMA_URL || "http://localhost:11434";
@@ -79,16 +90,32 @@ async function callOllama({ model, system, user, temperature = 0.1, timeoutMs })
       model,
       stream: false,
       format: "json",
-      api_key: GEMINI_API_KEY, // Replace with Gemini API key
-      system,
-      user,
-      temperature,
-      timeoutMs,
-    }),
+      options: {
+        temperature,
+        num_predict: 700
+      },
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user }
+      ]
+    })
   }), timeoutMs);
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Ollama ${model} failed ${response.status}: ${body.slice(0, 300)}`);
+  }
+
   const data = await response.json();
-  log("ollama.response", { duration: Date.now() - started, ...data });
-  return data;
+  const usage = {
+    model,
+    prompt_tokens: data.prompt_eval_count || 0,
+    completion_tokens: data.eval_count || 0,
+    total_duration_ms: data.total_duration ? Math.round(data.total_duration / 1e6) : Date.now() - started,
+    wall_ms: Date.now() - started
+  };
+
+  return { json: extractJson(data.message?.content), usage };
 }
 
 async function chatJson({ system, user, strong = false, temperature = 0.1, timeoutMs }) {
