@@ -11,8 +11,8 @@ function enabled() {
   return String(process.env.OLLAMA_ENABLED || "true").toLowerCase() !== "false";
 }
 
-function ollamaUrl() {
-  return process.env.OLLAMA_URL || "http://localhost:11434";
+function geminiUrl() {
+  return process.env.GEMINI_API_URL || "http://localhost:11434";
 }
 
 function cacheDir() {
@@ -65,7 +65,7 @@ function extractJson(content) {
     return JSON.parse(text);
   } catch {
     const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("Ollama response did not contain JSON");
+    if (!match) throw new Error("Gemini response did not contain JSON");
     return JSON.parse(match[0]);
   }
 }
@@ -80,12 +80,16 @@ async function withTimeout(promise, timeoutMs) {
   }
 }
 
-async function callOllama({ model, system, user, temperature = 0.1, timeoutMs }) {
+async function callGemini({ model, system, user, temperature = 0.1, timeoutMs }) {
+  console.log('Gemini request started');
   const started = Date.now();
-  const response = await withTimeout((signal) => fetch(`${ollamaUrl()}/api/chat`, {
+  const response = await withTimeout((signal) => fetch(`${geminiUrl()}/api/chat`, {
     method: "POST",
     signal,
-    headers: { "Content-Type": "application/json" },
+    headers: { 
+      "Content-Type": "application/json", 
+      "Authorization": `Bearer ${process.env.GEMINI_API_KEY}`
+    },
     body: JSON.stringify({
       model,
       stream: false,
@@ -103,7 +107,8 @@ async function callOllama({ model, system, user, temperature = 0.1, timeoutMs })
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`Ollama ${model} failed ${response.status}: ${body.slice(0, 300)}`);
+    console.error('Gemini request failure', error);
+    throw new Error(`Gemini ${model} failed ${response.status}: ${body.slice(0, 300)}`);
   }
 
   const data = await response.json();
@@ -115,13 +120,14 @@ async function callOllama({ model, system, user, temperature = 0.1, timeoutMs })
     wall_ms: Date.now() - started
   };
 
+  console.log('Gemini response received');
   return { json: extractJson(data.message?.content), usage };
 }
 
 async function chatJson({ system, user, strong = false, temperature = 0.1, timeoutMs }) {
   if (!enabled()) return null;
 
-  const primary = strong ? (process.env.OLLAMA_STRONG_MODEL || DEFAULT_MODEL) : (process.env.OLLAMA_MODEL || DEFAULT_MODEL);
+  const primary = strong ? (process.env.GEMINI_STRONG_MODEL || DEFAULT_MODEL) : (process.env.GEMINI_MODEL || DEFAULT_MODEL);
   const models = [primary, ...FALLBACK_MODELS.filter((item) => item !== primary)];
   const payload = { system, user, strong, temperature, primary };
   const key = cacheKey(payload);
@@ -129,24 +135,24 @@ async function chatJson({ system, user, strong = false, temperature = 0.1, timeo
   if (cached) return { ...cached, cached: true };
 
   let lastError = null;
-  const retries = Number(process.env.OLLAMA_RETRIES || 2);
-  const timeout = timeoutMs || Number(process.env.OLLAMA_TIMEOUT_MS || 90000);
+  const retries = Number(process.env.GEMINI_RETRIES || 2);
+  const timeout = timeoutMs || Number(process.env.GEMINI_TIMEOUT_MS || 90000);
 
   for (const model of models) {
     for (let attempt = 1; attempt <= retries; attempt += 1) {
       try {
-        const result = await callOllama({ model, system, user, temperature, timeoutMs: timeout });
+        const result = await callGemini({ model, system, user, temperature, timeoutMs: timeout });
         writeCache(key, result);
-        log("llm.ollama.complete", { model, cached: false, wall_ms: result.usage.wall_ms });
+        log("llm.gemini.complete", { model, cached: false, wall_ms: result.usage.wall_ms });
         return result;
       } catch (error) {
         lastError = error;
-        log("llm.ollama.failed", { model, attempt, error: error.message });
+        log("llm.gemini.failed", { model, attempt, error: error.message });
       }
     }
   }
 
-  throw lastError || new Error("Ollama inference failed");
+  throw lastError || new Error("Gemini inference failed");
 }
 
 async function enhanceFitScore(job, heuristicScore) {
