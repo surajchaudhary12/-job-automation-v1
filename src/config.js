@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-require("dotenv").config({ quiet: true });
+require("dotenv").config({ override: true, quiet: true });
 
 function rootDir() {
   return path.resolve(__dirname, "..");
@@ -14,6 +14,10 @@ function candidateProfile() {
   return readJson("config/candidate_profile.json");
 }
 
+function applicationPreferences() {
+  return candidateProfile().application_preferences || {};
+}
+
 function envFlag(name, fallback = false) {
   const value = process.env[name];
   if (value == null) return fallback;
@@ -25,4 +29,4 @@ function envNumber(name, fallback) {
   return Number.isFinite(value) ? value : fallback;
 }
 
-module.exports = { rootDir, readJson, candidateProfile, envFlag, envNumber };
+module.exports = { rootDir, readJson, candidateProfile, applicationPreferences, envFlag, envNumber };

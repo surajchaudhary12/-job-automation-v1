@@ -1,0 +1,13 @@
+[instructions]
+role = "Expert Automation Engineer"
+style = "Clean, modular, and well-documented code."
+
+[constraints]
+allow_file_creation = true
+allow_file_deletion = true
+allow_file_edit = true
+preferred_language = "python"
+testing_required = true
+
+[security]
+do_not_modify = [".env", "secrets.json"]

@@ -17,8 +17,8 @@ function normalizeTitle(value) {
 }
 
 function normalizeJob(job) {
-  return {
-    company: job.company || "",
+  const normalized = {
+    company: job.company || "Unknown Company",
     title: normalizeTitle(job.title || job.role || ""),
     role: normalizeTitle(job.role || job.title || ""),
     jd: stripHtml(job.jd || job.description || ""),
@@ -28,16 +28,20 @@ function normalizeJob(job) {
     salary_estimate: job.salary_estimate || job.compensation_hint || "",
     recruiter: job.recruiter || ""
   };
+  log("job.normalize", { original: job.company, normalized: normalized.company });
+  return normalized;
 }
 
 function isRelevantJob(job) {
   const title = `${job.title}`.toLowerCase();
   const text = `${job.title} ${job.jd}`.toLowerCase();
-  const titleInclude = /(backend|software engineer|sde|platform|java|spring|systems|distributed|api|server)/.test(title);
-  const jdInclude = /(backend engineer|java backend|spring boot|distributed systems|platform engineer)/.test(text);
-  const exclude = /(frontend|ios|android|designer|product manager|sales|support|risk|growth|marketing|operations|analyst)/.test(title);
-  
-  const isRelevant = (titleInclude || jdInclude) && !exclude;
+  const titleInclude = /(backend|software engineer|sde|platform|java|spring|systems|distributed|api|server|software)/.test(title);
+  const jdInclude = /(backend engineer|java backend|spring boot|distributed systems|platform engineer|software engineer)/.test(text);
+  const exclude = /(frontend|ios|android|designer|product manager|sales|support|risk|growth|marketing|operations)/.test(title);
+  const isAnalystRole = /analyst/.test(title);
+  const isTechnicalAnalyst = isAnalystRole && (title.includes("software") || title.includes("sde") || title.includes("developer"));
+
+  const isRelevant = (titleInclude || jdInclude) && (!exclude && (!isAnalystRole || isTechnicalAnalyst));
   if (isRelevant) {
     log("job.discovered", { company: job.company, title: job.title });
   } else {

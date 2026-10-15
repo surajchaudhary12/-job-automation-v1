@@ -19,6 +19,11 @@ const PLATFORMS = {
     loginUrl: "https://www.instahyre.com/login/",
     homeUrl: "https://www.instahyre.com/candidate/opportunities/",
     profileDir: "instahyre"
+  },
+  hirist: {
+    loginUrl: "https://www.hirist.tech/login",
+    homeUrl: "https://www.hirist.tech/",
+    profileDir: "hirist"
   }
 };
 

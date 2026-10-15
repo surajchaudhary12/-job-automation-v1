@@ -4,19 +4,14 @@ const crypto = require("crypto");
 const { candidateProfile, rootDir } = require("../config");
 const { log } = require("../logging/logger");
 
-const DEFAULT_MODEL = "qwen2.5-coder:14b";
-const FALLBACK_MODELS = ["llama3.1", "deepseek-coder", "mistral"];
+const DEFAULT_MODEL = "gemini-2.5-flash";
 
 function enabled() {
-  return String(process.env.GEMINI_ENABLED || "true").toLowerCase() !== "false";
-}
-
-function geminiUrl() {
-  return process.env.GEMINI_API_URL || "http://localhost:11434";
+  return !!process.env.GEMINI_API_KEY;
 }
 
 function cacheDir() {
-  const dir = path.join(rootDir(), ".cache", "ollama");
+  const dir = path.join(rootDir(), ".cache", "gemini");
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
@@ -44,7 +39,20 @@ function compactProfile() {
     positioning: profile.positioning,
     skills: profile.skills,
     achievements: profile.achievements,
-    metrics: profile.metrics
+    metrics: profile.metrics,
+    disallowed_titles: [
+      "Business Analyst",
+      "Frontend engineer",
+      "AI researcher",
+      "DevOps engineer"
+    ],
+    preferred_roles: [
+      "Backend engineering",
+      "Java/C++",
+      "Systems",
+      "Platform",
+      "Product engineering"
+    ]
   };
 }
 
@@ -81,72 +89,70 @@ async function withTimeout(promise, timeoutMs) {
 }
 
 async function callGemini({ model, system, user, temperature = 0.1, timeoutMs }) {
-  console.log('Gemini request started');
   const started = Date.now();
-  const response = await withTimeout((signal) => fetch(`${geminiUrl()}/api/chat`, {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY not found in environment");
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+  const body = {
+    systemInstruction: { parts: [{ text: system }] },
+    contents: [{ role: "user", parts: [{ text: user }] }],
+    generationConfig: {
+      temperature,
+      responseMimeType: "application/json"
+    }
+  };
+
+  const response = await withTimeout((signal) => fetch(url, {
     method: "POST",
     signal,
-    headers: { 
-      "Content-Type": "application/json", 
-      "Authorization": `Bearer ${process.env.GEMINI_API_KEY}`
-    },
-    body: JSON.stringify({
-      model,
-      stream: false,
-      format: "json",
-      options: {
-        temperature,
-        num_predict: 700
-      },
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user }
-      ]
-    })
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
   }), timeoutMs);
 
   if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Gemini ${model} failed ${response.status}: ${body.slice(0, 300)}`);
+    const errorBody = await response.text();
+    throw new Error(`Gemini ${model} failed ${response.status}: ${errorBody.slice(0, 300)}`);
   }
 
   const data = await response.json();
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+  
   const usage = {
     model,
-    prompt_tokens: data.prompt_eval_count || 0,
-    completion_tokens: data.eval_count || 0,
-    total_duration_ms: data.total_duration ? Math.round(data.total_duration / 1e6) : Date.now() - started,
+    prompt_tokens: data.usageMetadata?.promptTokenCount || 0,
+    completion_tokens: data.usageMetadata?.candidatesTokenCount || 0,
+    total_duration_ms: Date.now() - started,
     wall_ms: Date.now() - started
   };
 
-  return { json: extractJson(data.message?.content), usage };
+  return { json: extractJson(content), usage };
 }
 
 async function chatJson({ system, user, strong = false, temperature = 0.1, timeoutMs }) {
   if (!enabled()) return null;
 
-  const primary = strong ? (process.env.GEMINI_STRONG_MODEL || DEFAULT_MODEL) : (process.env.GEMINI_MODEL || DEFAULT_MODEL);
-  const models = [primary, ...FALLBACK_MODELS.filter((item) => item !== primary)];
-  const payload = { system, user, strong, temperature, primary };
+  const model = strong ? "gemini-2.5-pro" : DEFAULT_MODEL;
+  log("llm.gemini.debug", { model });
+  const payload = { system, user, strong, temperature, model };
   const key = cacheKey(payload);
   const cached = readCache(key);
   if (cached) return { ...cached, cached: true };
 
   let lastError = null;
-  const retries = Number(process.env.GEMINI_RETRIES || 2);
-  const timeout = timeoutMs || Number(process.env.GEMINI_TIMEOUT_MS || 90000);
+  const retries = 2;
+  const timeout = timeoutMs || 90000;
 
-  for (const model of models) {
-    for (let attempt = 1; attempt <= retries; attempt += 1) {
-      try {
-        const result = await callGemini({ model, system, user, temperature, timeoutMs: timeout });
-        writeCache(key, result);
-        log("llm.gemini.complete", { model, cached: false, wall_ms: result.usage.wall_ms });
-        return result;
-      } catch (error) {
-        lastError = error;
-        log("llm.gemini.failed", { model, attempt, error: error.message });
-      }
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      const result = await callGemini({ model, system, user, temperature, timeoutMs: timeout });
+      writeCache(key, result);
+      log("llm.gemini.complete", { model, cached: false, wall_ms: result.usage.wall_ms });
+      return result;
+    } catch (error) {
+      lastError = error;
+      log("llm.gemini.failed", { model, attempt, error: error.message });
     }
   }
 
@@ -182,7 +188,7 @@ async function tailorResumeDeltas(job) {
     system: "Return compact JSON only. Mutate resume deltas only. Do not invent experience, companies, or technologies.",
     user: JSON.stringify({
       task: "Return summary, ordered_skills, project_order, keywords. Keep ATS one-page style.",
-      candidate: compactProfile(),
+      candidate: candidateProfile(),
       job: compactJob(job)
     })
   });
@@ -201,4 +207,4 @@ async function recruiterOutreach(job) {
   });
 }
 
-module.exports = { enabled, enhanceFitScore, extractAtsDeltas, tailorResumeDeltas, recruiterOutreach };
+module.exports = { enabled, enhanceFitScore, extractAtsDeltas, tailorResumeDeltas, recruiterOutreach, callGemini };

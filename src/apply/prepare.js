@@ -1,16 +1,22 @@
-const path = require("path");
+﻿const path = require("path");
 const { envFlag } = require("../config");
 const { launchPersistentProfile } = require("../browser/session");
 const { warmPage, humanDelay } = require("../browser/humanBehavior");
-// const { handleGreenhouse } = require("./ats/greenhouse"); // To be created
+const { evaluateAutoSubmit } = require("./gates");
+const { handleGreenhouse } = require("./ats/greenhouse");
+const { handleLever } = require("./ats/lever");
+const { handleLinkedInEasyApply } = require("./ats/linkedin");
+const { handleInstahyre } = require("./ats/instahyre");
+const { handleWellfound } = require("./ats/wellfound");
 
 async function prepareApply(job, resume, options = {}) {
-  const autoSubmit = options.autoSubmit ?? envFlag("AUTO_SUBMIT", false);
-  const confidence = Number(job.fit_score || job.fitScore || 0);
-  const lowRisk = /greenhouse|lever|yc/i.test(job.source || "");
+  const gate = evaluateAutoSubmit(job, { autoSubmit: options.autoSubmit ?? envFlag("AUTO_SUBMIT", false), threshold: options.threshold });
+  const confidence = gate.confidence;
+  const source = gate.source;
+  const artifactName = `${String(job.company || "job").replace(/[^a-z0-9]+/gi, "_")}_${Date.now()}`;
 
   const context = await launchPersistentProfile(
-    job.source === "linkedin" ? "linkedin" : "default",
+    (source === "linkedin" || source === "wellfound" || source === "instahyre") ? source : "default",
     {
       headless: options.headless,
     },
@@ -24,19 +30,68 @@ async function prepareApply(job, resume, options = {}) {
     });
     await warmPage(page);
 
-    const fileInputs = await page.locator('input[type="file"]').all();
-    if (fileInputs.length && resume?.pdfPath) {
-      await fileInputs[0].setInputFiles(path.resolve(resume.pdfPath));
-      await humanDelay(800, 1800);
-    } else if (fileInputs.length && resume?.texPath) {
-      console.log("Resume PDF unavailable; leaving upload for manual review.");
+    const canAutoSubmit = gate.canAutoSubmit;
+    if (!canAutoSubmit) {
+      console.log(`Auto-submit gated for ${job.company}: ${gate.reasons?.join(", ") || "gate not passed"}`);
+    }
+    
+    // --- ATS ROUTER ---
+    async function finalize(result) {
+      let screenshotPath = result?.screenshotPath;
+      if (!screenshotPath) {
+        screenshotPath = path.join(process.cwd(), "logs", `${artifactName}.png`);
+        try {
+          await page.screenshot({ path: screenshotPath, fullPage: true });
+        } catch (error) {
+          console.error(`Failed to capture screenshot for ${job.company}:`, error.message);
+          screenshotPath = "";
+        }
+      }
+      return { ...result, screenshotPath, gate };
     }
 
-    const canAutoSubmit = autoSubmit && confidence >= 8.5 && lowRisk;
-    if (!canAutoSubmit) {
+    function normalizeResultStatus(result) {
+      const status = String(result?.status || "").toLowerCase();
+      if (status === "submitted" || status === "applied") return "applied";
+      if (status === "review_required") return "review_required";
+      if (status === "failed") return "failed";
+      return canAutoSubmit ? "applied" : "prepared";
+    }
+
+    try {
+      if (source === 'greenhouse' || (job.url && job.url.includes('greenhouse.io'))) {
+        const result = await handleGreenhouse(page, job, resume, { autoSubmit: canAutoSubmit });
+        const status = normalizeResultStatus(result);
+        return await finalize({ status, submitted: status === "applied", ...result });
+      } else if (source === 'lever' || (job.url && job.url.includes('lever.co'))) {
+        const result = await handleLever(page, job, resume, { autoSubmit: canAutoSubmit });
+        const status = normalizeResultStatus(result);
+        return await finalize({ status, submitted: status === "applied", ...result });
+      } else if (source === 'linkedin') {
+        const result = await handleLinkedInEasyApply(page, job, resume, { autoSubmit: canAutoSubmit });
+        const status = normalizeResultStatus(result);
+        return await finalize({ status, submitted: status === "applied", ...result });
+      } else if (source === 'instahyre') {
+        const result = await handleInstahyre(page, job, resume, { autoSubmit: canAutoSubmit });
+        const status = normalizeResultStatus(result);
+        return await finalize({ status, submitted: status === "applied", ...result });
+      } else if (source === 'wellfound') {
+        const result = await handleWellfound(page, job, resume, { autoSubmit: canAutoSubmit });
+        const status = normalizeResultStatus(result);
+        return await finalize({ status, submitted: status === "applied", ...result });
+      }
+
+      // Fallback: simple file upload if not a specific ATS handler
+      const fileInputs = await page.locator('input[type="file"]').all();
+      if (fileInputs.length && resume?.pdfPath) {
+        await fileInputs[0].setInputFiles(path.resolve(resume.pdfPath));
+        await humanDelay(800, 1800);
+      }
+
       console.log(
-        "Application prepared. Review the browser and submit manually if everything looks correct.",
+        `No automated handler yet for ${job.source}. Leaving for manual review.`,
       );
+      
       await page.screenshot({
         path: path.join(
           process.cwd(),
@@ -46,32 +101,18 @@ async function prepareApply(job, resume, options = {}) {
         fullPage: true,
       });
       await humanDelay(3000, 5000);
-      return { status: "prepared", submitted: false };
-    }
-
-    console.log(
-      `Auto-submit enabled for ${job.company}. Routing to ATS handler for: ${job.source}`,
-    );
-
-    try {
-      // --- ATS ROUTER ---
-      // if (job.source.toLowerCase() === 'greenhouse') {
-      //   await handleGreenhouse(page, job, resume);
-      //   return { status: "applied", submitted: true };
-      // } else if (job.source.toLowerCase() === 'linkedin') {
-      //   // await handleLinkedInEasyApply(page, job, resume);
-      // }
-
-      console.log(
-        `No automated handler yet for ${job.source}. Leaving for manual review.`,
-      );
-      return { status: "prepared", submitted: false };
+      
+      return await finalize({ status: "prepared", submitted: false });
     } catch (error) {
-      console.error(`Failed to auto-apply for ${job.company}:`, error.message);
-      return { status: "failed", submitted: false };
+      console.error(`Failed to apply for ${job.company}:`, error.message);
+      return await finalize({ status: "failed", submitted: false, error: error.message });
     }
   } finally {
-    await context.close();
+    if (options.keepOpen) {
+        // Do not close context if user wants to review
+    } else {
+        await context.close();
+    }
   }
 }
 

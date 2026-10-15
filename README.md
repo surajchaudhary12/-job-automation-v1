@@ -47,10 +47,13 @@ Run once per platform:
 
 ```powershell
 npm run login:linkedin
-npm run login:wellfound
+npm run login:instahyre
 ```
 
+Run: pip install reportlab
+
 These use `chromium.launchPersistentContext()` and store cookies under `profiles/`. Passwords are not stored by the app.
+
 
 ## PostgreSQL
 

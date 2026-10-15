@@ -1,52 +1,37 @@
 \documentclass[10pt]{article}
 \usepackage[margin=0.55in]{geometry}
+\usepackage{titlesec}
 \usepackage[hidelinks]{hyperref}
 \usepackage{enumitem}
 \setlist[itemize]{leftmargin=*, nosep}
 \pagestyle{empty}
+\titleformat{\section}{\large\bfseries}{}{0em}{\MakeUppercase}[\titlerule]
+\titlespacing*{\section}{0pt}{5pt}{3pt}
 
 \begin{document}
 
 \begin{center}
 {\Large {{NAME}}}\\
-\href{mailto:{{EMAIL}}}{{{EMAIL}}} \quad | \quad {{PHONE}} \quad | \quad {{LOCATIONS}}\\
-Backend Engineer | AI Backend | Java | APIs | Scalable Systems
+\href{mailto:{{EMAIL}}}{{{EMAIL}}} \quad | \quad {{PHONE}} \quad | \quad {{LOCATIONS}} \quad | \quad {{CONTACT_LINKS}}\\
+Analyst | Platform Engineering | Node.js | TypeScript
 \end{center}
 
 \section*{Summary}
 {{SUMMARY}}
 
-\section*{Skills}
-\textbf{Backend:} Java, Spring Boot, Node.js, REST APIs, API Optimization\\
-\textbf{AI Backend:} API Integration, Workflow Automation, Data Pipelines, Evaluation-Oriented Debugging\\
-\textbf{Databases:} MySQL, MongoDB\\
-\textbf{Engineering:} C++, OOP, DSA, System Design, Monitoring, Debugging
-
-\section*{Experience}
-\textbf{{{CURRENT_COMPANY}}} \hfill {{CURRENT_TITLE}}\\
-\textit{Backend systems, production workflows, analytics-driven engineering}\\
-\begin{itemize}
-\item Built and improved reliable production workflows involving data-heavy operations, debugging, and automation-oriented execution, contributing to {{NMV}}.
-\item Optimized recurring API and monitoring workflows with measurable reliability and efficiency impact, contributing to {{RETENTION}}.
-\item Applied backend engineering and analytical rigor to improve scalable operational systems, contributing to {{REVENUE}}.
-\end{itemize}
-
-\section*{Projects}
-\textbf{AI Backend/API Project}\\
-\begin{itemize}
-\item Built API-driven backend workflows with structured validation, database persistence, and reliable service boundaries.
-\item Designed maintainable integration patterns for automation-heavy product workflows.
-\end{itemize}
-
-\textbf{Backend Systems Project}\\
-\begin{itemize}
-\item Implemented REST API services using Java/Spring Boot with optimized database access and production-oriented error handling.
-\end{itemize}
-
-\section*{Competitive Programming}
-{{ACHIEVEMENTS}}
-
 \section*{Education}
 {{EDUCATION}}
+
+\section*{Experience}
+{{EXPERIENCE}}
+
+\section*{Projects}
+{{PROJECTS}}
+
+\section*{Technical Skills}
+{{SKILLS}}
+
+\section*{Achievements}
+{{ACHIEVEMENTS}}
 
 \end{document}

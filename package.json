@@ -3,15 +3,17 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
     "backend": "node src/server.js",
     "demo": "node src/demo.js",
-    "live": "node src/live.js",
-    "scheduler": "node src/scheduler.js",
-    "login:linkedin": "node scripts/login_linkedin.js",
-    "login:wellfound": "node scripts/login_wellfound.js",
-    "login:instahyre": "node scripts/login_instahyre.js",
+    "live": "node index.js live",
+    "scheduler": "node index.js scheduler",
+    "login:linkedin": "node index.js login linkedin",
+    "login:wellfound": "node index.js login wellfound",
+    "login:instahyre": "node index.js login instahyre",
+    "login:hirist": "node index.js login hirist",
     "ollama:pull": "ollama pull qwen2.5-coder:14b",
-    "dashboard": "next dev dashboard",
+    "dashboard": "next dev dashboard --webpack",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "test": "node src/demo.js"
@@ -23,16 +25,21 @@
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "@tailwindcss/postcss": "^4.3.0",
+    "better-sqlite3": "^11.8.1",
     "clsx": "^2.1.1",
+    "commander": "^14.0.3",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "lucide-react": "^1.14.0",
     "next": "^16.2.6",
     "node-cron": "^4.2.1",
     "playwright": "^1.59.1",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "tailwindcss": "^4.3.0"
+    "tailwindcss": "^4.3.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "prisma": "^6.19.3"

@@ -1,15 +1,40 @@
 {
   "greenhouse_boards": [
-    "razorpay",
-    "meesho",
+    "phonepe",
     "groww",
-    "cred"
+    "cloudflare",
+    "atlassian",
+    "uber",
+    "grab",
+    "gojek",
+    "inmobi",
+    "chargebee",
+    "alphasense",
+    "rubrik",
+    "cohesity",
+    "confluent",
+    "snowflake",
+    "databricks",
+    "postman"
   ],
   "lever_companies": [
-    "postman",
     "atlan",
-    "browserstack"
+    "browserstack",
+    "spotify",
+    "figma",
+    "notion",
+    "airtable",
+    "slack"
   ],
   "locations": ["Bangalore", "Gurgaon", "Remote"],
-  "queries": ["backend engineer", "java backend engineer", "platform engineer", "software engineer backend"]
+  "queries": [
+    "backend engineer",
+    "java backend engineer",
+    "platform engineer",
+    "software engineer backend",
+    "SDE",
+    "Software Engineer",
+    "YC backend engineer",
+    "YC S24 backend"
+  ]
 }

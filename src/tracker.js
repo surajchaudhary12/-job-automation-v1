@@ -14,9 +14,16 @@ function writeTracker(rootDir, entries) {
 function upsertApplication(rootDir, entry) {
   const entries = readTracker(rootDir);
   const index = entries.findIndex((existing) => existing.company === entry.company && existing.role === entry.role);
-  if (index >= 0) entries[index] = { ...entries[index], ...entry };
-  else entries.push(entry);
+  const created = index < 0;
+  if (created) entries.push(entry);
+  else entries[index] = { ...entries[index], ...entry };
   writeTracker(rootDir, entries);
+  return {
+    created,
+    updated: !created,
+    persistedCount: entries.length,
+    entry: created ? entry : entries[index]
+  };
 }
 
 function entryId(entry) {

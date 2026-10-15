@@ -6,8 +6,9 @@ const { recruiterMessage } = require("../outreach");
 const { upsertApplication } = require("../tracker");
 const { storeApplication, storeRun } = require("../db/store");
 const { disconnectPrisma } = require("../db/prisma");
-const llm = require("../llm/ollama");
+const llm = require("../llm/index");
 const { prepareApply } = require("../apply/prepare");
+const { evaluateAutoSubmit } = require("../apply/gates");
 const { saveReport } = require("../report");
 const { log } = require("../logging/logger");
 
@@ -37,16 +38,18 @@ async function runLivePipeline(options = {}) {
   const limit = options.limit || 25;
   const maxApplications = envNumber("MAX_APPLICATIONS_PER_DAY", 35);
   const liveApply = options.prepareApply ?? envFlag("LIVE_APPLY", false);
+  const autoSubmit = options.autoSubmit ?? envFlag("AUTO_SUBMIT", false);
   const useLlm = options.useLlm ?? llm.enabled();
-  const autoApplyThreshold = envNumber("AUTO_APPLY_THRESHOLD", 8);
+  const autoApplyThreshold = envNumber("AUTO_APPLY_THRESHOLD", 7);
   const usages = [];
 
-  log("run.start", { mode: "live", limit, useLlm, liveApply, autoApplyThreshold });
-  const jobs = await discoverJobs({ limit });
+  log("run.start", { mode: "live", limit, useLlm, liveApply, autoSubmit, autoApplyThreshold });
+  const jobs = options.jobs || await discoverJobs({ limit });
   log("discovery.complete", { count: jobs.length });
 
   const results = [];
   let preparedCount = 0;
+  let persistedCount = 0;
 
   for (const job of jobs) {
     if (preparedCount >= maxApplications) break;
@@ -70,6 +73,7 @@ async function runLivePipeline(options = {}) {
 
     const shouldTailor = score.fit_score >= 7 && !score.compensation_probability?.startsWith("Low");
     let resume = { template: "", texPath: "", pdfPath: null, keywords: [] };
+    let resumeGenerationError = "";
     let message = "";
 
     if (shouldTailor) {
@@ -90,8 +94,14 @@ async function runLivePipeline(options = {}) {
       }
 
       log("pipeline.stage", { company: job.company, stage: "RESUME_GENERATED", message: "Generating tailored resume" });
-      resume = generateResume({ ...job, role: job.title }, root, { atsDeltas, resumeDeltas });
-      status = "RESUME_GENERATED";
+      try {
+        resume = await generateResume({ ...job, role: job.title }, root, { atsDeltas, resumeDeltas });
+        status = "RESUME_GENERATED";
+      } catch (error) {
+        resumeGenerationError = error.message;
+        status = "REVIEW_REQUIRED";
+        log("resume.compile.failed", { company: job.company, title: job.title, error: error.message });
+      }
 
       if (job.recruiter) {
         try {
@@ -104,7 +114,8 @@ async function runLivePipeline(options = {}) {
       }
     }
 
-    const shouldAutoApply = score.fit_score >= autoApplyThreshold;
+    const autoSubmitGate = evaluateAutoSubmit({ ...job, fit_score: score.fit_score }, { autoSubmit, threshold: autoApplyThreshold });
+    const shouldAutoApply = score.fit_score >= autoApplyThreshold && Boolean(resume.pdfPath);
     if (shouldTailor && !shouldAutoApply) {
         status = "REVIEW_REQUIRED";
     }
@@ -124,22 +135,33 @@ async function runLivePipeline(options = {}) {
       recruiter_message: message,
       resume_template: resume.template,
       resume_version: resume.version || "",
-      resume_used: resume.pdfPath || resume.texPath || "",
+      resume_used: resume.pdfPath || "",
       notes: [
         `Career upside: ${score.career_upside}`,
         `Interview probability: ${score.interview_probability}`,
         `Priority: ${score.priority}`,
-        score.risks?.length ? `Risks: ${score.risks.join("; ")}` : "Ready for human apply review"
-      ].join(" | "),
+        `Auto-submit: ${autoSubmitGate.canAutoSubmit ? "enabled" : "blocked"}${autoSubmitGate.canAutoSubmit ? "" : ` (${autoSubmitGate.reasons.join(", ")})`}`,
+        score.risks?.length ? `Risks: ${score.risks.join("; ")}` : "Ready for human apply review",
+        resumeGenerationError ? `Resume generation failed: ${resumeGenerationError}` : ""
+      ].filter(Boolean).join(" | "),
       updated_at: new Date().toISOString()
     };
 
     if (liveApply && shouldTailor && shouldAutoApply) {
       log("pipeline.stage", { company: job.company, stage: "APPLYING", message: "Executing platform application" });
       entry.status = "APPLYING";
-      const prepared = await prepareApply({ ...job, fit_score: score.fit_score }, resume, { autoSubmit: false });
+      const prepared = await prepareApply({ ...job, fit_score: score.fit_score }, resume, { autoSubmit, threshold: autoApplyThreshold });
+      if (prepared?.screenshotPath) {
+        entry.application_screenshot = prepared.screenshotPath;
+      }
+      if (prepared?.missingRequiredFields?.length) {
+        entry.notes = `${entry.notes} | Missing required fields: ${prepared.missingRequiredFields.join(", ")}`;
+      }
       
       if (prepared.status === "prepared") {
+         entry.status = "REVIEW_REQUIRED";
+         preparedCount += 1;
+      } else if (prepared.status === "review_required") {
          entry.status = "REVIEW_REQUIRED";
          preparedCount += 1;
       } else if (prepared.status === "applied") {
@@ -151,18 +173,27 @@ async function runLivePipeline(options = {}) {
       }
     }
 
-    upsertApplication(root, entry);
-    log("job.persisted", { company: entry.company, role: entry.role, status: entry.status });
+    const persisted = upsertApplication(root, entry);
+    persistedCount += 1;
+    log("job.persisted", {
+      company: entry.company,
+      role: entry.role,
+      status: entry.status,
+      created: persisted.created,
+      tracker_count: persisted.persistedCount
+    });
     await storeApplication(entry).catch((error) => log("db.application.failed", { error: error.message }));
     results.push({ ...entry, priority: score.priority });
   }
+
+  log("jobs.persisted.count", { attempted: results.length, persisted: persistedCount });
 
   const report = await saveReport(root, results);
   const usage = tokenUsageTotal(usages);
   const runSummary = {
     mode: "live",
     discoveredCount: jobs.length,
-    shortlistedCount: results.filter((item) => ["REVIEW_REQUIRED", "APPLIED", "APPLYING"].includes(item.status)).length,
+    shortlistedCount: results.filter((item) => ["REVIEW_REQUIRED", "APPLIED", "APPLYING", "RESUME_GENERATED"].includes(item.status)).length,
     preparedCount,
     appliedCount: results.filter((item) => item.status === "APPLIED").length,
     llmPromptTokens: usage.prompt,

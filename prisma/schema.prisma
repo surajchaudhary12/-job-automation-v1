@@ -18,6 +18,21 @@ enum ApplicationStatus {
   offer
 }
 
+model JobSource {
+  id          String   @id @default(cuid())
+  name        String
+  url         String?
+  type        String   // e.g., "greenhouse", "lever", "linkedin"
+  isEnabled   Boolean  @default(true)
+  lastFetched DateTime?
+  config      Json?    // Stores specific config like board tokens
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  jobs        Job[]
+
+  @@map("job_sources")
+}
+
 model Job {
   id             String        @id @default(cuid())
   company        String
@@ -25,18 +40,23 @@ model Job {
   jd             String
   url            String        @unique
   location       String?
-  source         String
+  source         String        // Kept for backward compatibility
+  sourceId       String?       // Relation to JobSource
+  jobSource      JobSource?    @relation(fields: [sourceId], references: [id])
   salaryEstimate String?
   fitScore       Float?
   compensation   String?
   careerUpside   String?
   interviewProb  String?
+  status         String        @default("active") // "active", "expired", "filled"
+  raw            Json?         // Original response from source
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   applications   Application[]
 
   @@index([company, title])
   @@index([fitScore])
+  @@index([status])
   @@map("jobs")
 }
 

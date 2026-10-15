@@ -1,0 +1,9 @@
+[[tools]]
+name = "file_editor"
+description = "Edit, create, or delete files in the current workspace."
+enabled = true
+
+[[tools]]
+name = "terminal_executor"
+description = "Run pip install or python scripts to test changes."
+enabled = true

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   Activity,
   AlertTriangle,
@@ -12,6 +13,7 @@ import {
   ClipboardCheck,
   ExternalLink,
   Eye,
+  Download,
   FileText,
   Gauge,
   LogIn,
@@ -130,6 +132,8 @@ function JobsTable({ jobs, onSelect }) {
     setSort((current) => ({ key, dir: current.key === key && current.dir === "desc" ? "asc" : "desc" }));
   }
 
+const router = useRouter();
+
   return (
     <Card className="overflow-hidden">
       <div className="flex flex-col gap-3 border-b border-zinc-800 p-4 lg:flex-row lg:items-center lg:justify-between">
@@ -176,7 +180,7 @@ function JobsTable({ jobs, onSelect }) {
           <tbody>
             {visible.length > 0 ? (
               visible.map((job) => (
-                <tr key={job.id} onClick={() => onSelect(job)} className="cursor-pointer border-t border-zinc-900 hover:bg-zinc-900/70">
+                <tr key={job.id} onClick={() => router.push(`/jobs/${job.id}`)} className="cursor-pointer border-t border-zinc-900 hover:bg-zinc-900/70">
                   <td className="px-4 py-3 font-medium text-zinc-100">{job.company}</td>
                   <td className="px-4 py-3 text-zinc-300">{job.role}</td>
                   <td className={cx("px-4 py-3 font-semibold", fitColor(job.fit_score))}>{job.fit_score ?? "-"}</td>
@@ -208,7 +212,8 @@ function JobsTable({ jobs, onSelect }) {
   );
 }
 
-function StageTracker({ jobs, onSelect }) {
+function StageTracker({ jobs }) {
+  const router = useRouter();
   const grouped = STAGES.map((stage) => ({ stage, jobs: jobs.filter((job) => job.status === stage || (stage === "OA" && job.status === "OA received")) }));
   return (
     <Card className="p-4">
@@ -228,7 +233,7 @@ function StageTracker({ jobs, onSelect }) {
             </div>
             <div className="space-y-2">
               {group.jobs.slice(0, 3).map((job) => (
-                <button key={job.id} onClick={() => onSelect(job)} className="w-full rounded-md border border-zinc-800 bg-zinc-950 p-2 text-left text-xs hover:border-teal-700">
+                <button key={job.id} onClick={() => router.push(`/jobs/${job.id}`)} className="w-full rounded-md border border-zinc-800 bg-zinc-950 p-2 text-left text-xs hover:border-teal-700">
                   <span className="block truncate text-zinc-200">{job.company}</span>
                   <span className="block truncate text-zinc-500">{job.role}</span>
                 </button>
@@ -301,9 +306,14 @@ function ResumeViewer({ job }) {
             <span className="rounded-full bg-zinc-950 px-2 py-1">Version: {job.resume_version || "latest"}</span>
           </div>
           {resumePath ? (
-            <a href={`${API}/api/resume?path=${encodeURIComponent(resumePath)}`} target="_blank" className="mt-3 inline-flex h-9 items-center gap-2 rounded-md border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-100 hover:bg-zinc-800">
-              <Eye size={15} />View Resume Used
-            </a>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <a href={`${API}/api/resume?path=${encodeURIComponent(resumePath)}`} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-100 hover:bg-zinc-800">
+                <Eye size={15} />View Resume Used
+              </a>
+              <a href={`${API}/api/resume?path=${encodeURIComponent(resumePath)}&download=1`} className="inline-flex h-9 items-center gap-2 rounded-md border border-teal-700 bg-teal-500/10 px-3 text-sm text-teal-200 hover:bg-teal-500/20">
+                <Download size={15} />Download Resume
+              </a>
+            </div>
           ) : null}
           {isPdf ? <iframe title="PDF preview" src={`${API}/api/resume?path=${encodeURIComponent(resumePath)}`} className="mt-3 h-80 w-full rounded-md border border-zinc-800" /> : null}
           {!isPdf && tex ? <pre className="mt-3 max-h-80 overflow-auto rounded-md bg-zinc-950 p-3 text-xs text-zinc-300">{tex}</pre> : null}
@@ -412,6 +422,15 @@ function JobDetails({ job, onPatch }) {
           <Button onClick={() => savePatch({ status: "shortlisted", review_decision: "approved", recruiter_message: message, resume_summary: summary })}><CheckCircle2 size={16} />Approve</Button>
           <Button variant="danger" onClick={() => savePatch({ status: "rejected", review_decision: "rejected", recruiter_message: message, resume_summary: summary })}><XCircle size={16} />Reject</Button>
           <Button variant="secondary" onClick={() => savePatch({ recruiter_message: message, resume_summary: summary })}>Save edits</Button>
+          <Button onClick={() => {
+            fetchJson("/api/runs/live", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ jobId: job.id, limit: 1, prepareApply: true, autoSubmit: true })
+            })
+              .then(() => alert("Selected job test run complete. Check backend logs for apply result."))
+              .catch((e) => alert("Test run failed: " + e.message));
+          }}>Test selected job</Button>
         </div>
       </Card>
 
@@ -506,11 +525,12 @@ export default function Dashboard() {
   const [health, setHealth] = useState(null);
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState("");
+  const [runMode, setRunMode] = useState("prepare");
 
   async function refresh() {
     try {
       const [applications, status] = await Promise.all([
-        fetchJson("/api/applications"),
+        fetchJson("/api/jobs"),
         fetchJson("/api/health/status")
       ]);
       setJobs(applications);
@@ -550,14 +570,30 @@ export default function Dashboard() {
             <h1 className="text-3xl font-semibold tracking-tight">Application Management</h1>
             <p className="mt-1 text-sm text-zinc-500">Review high-fit backend roles, resumes, outreach, and scheduler health from one workflow surface.</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={runMode}
+              onChange={(event) => setRunMode(event.target.value)}
+              className="h-9 rounded-md border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
+            >
+              <option value="discover">Discover only</option>
+              <option value="prepare">Prepare apply</option>
+              <option value="auto">Auto-apply</option>
+            </select>
             <Button variant="secondary" onClick={refresh}><Activity size={16} />Refresh</Button>
             <Button onClick={() => {
-              alert("Discovery pipeline started! This will take a few minutes. Check the backend terminal for live progress logs.");
-              fetchJson("/api/runs/live", { method: "POST" })
+              const prepareApply = runMode !== "discover";
+              const autoSubmit = runMode === "auto";
+              const label = runMode === "discover" ? "discovery" : runMode === "prepare" ? "prepare apply" : "auto-apply";
+              alert(`${label} run started. Check the backend terminal for live progress logs.`);
+              fetchJson("/api/runs/live", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ limit: 25, prepareApply, autoSubmit })
+              })
                 .then(() => alert("Discovery run complete!"))
                 .catch((e) => alert("Discovery failed: " + e.message));
-            }}><Send size={16} />Run discovery</Button>
+            }}><Send size={16} />Run {runMode === "discover" ? "discovery" : runMode === "prepare" ? "prepare apply" : "auto-apply"}</Button>
           </div>
         </header>
 

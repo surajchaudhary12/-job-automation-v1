@@ -1,52 +1,37 @@
 \documentclass[10pt]{article}
 \usepackage[margin=0.55in]{geometry}
+\usepackage{titlesec}
 \usepackage[hidelinks]{hyperref}
 \usepackage{enumitem}
 \setlist[itemize]{leftmargin=*, nosep}
 \pagestyle{empty}
+\titleformat{\section}{\large\bfseries}{}{0em}{\MakeUppercase}[\titlerule]
+\titlespacing*{\section}{0pt}{5pt}{3pt}
 
 \begin{document}
 
 \begin{center}
 {\Large {{NAME}}}\\
-\href{mailto:{{EMAIL}}}{{{EMAIL}}} \quad | \quad {{PHONE}} \quad | \quad {{LOCATIONS}}\\
-Software Engineer | Backend Systems | Product Engineering | DSA
+\href{mailto:{{EMAIL}}}{{{EMAIL}}} \quad | \quad {{PHONE}} \quad | \quad {{LOCATIONS}} \quad | \quad {{CONTACT_LINKS}}\\
+Analyst | Platform Engineering | Node.js | TypeScript
 \end{center}
 
 \section*{Summary}
 {{SUMMARY}}
 
-\section*{Skills}
-\textbf{Languages:} Java, C++, JavaScript, SQL\\
-\textbf{Backend:} Spring Boot, Node.js, REST APIs, API Optimization, Scalable Applications\\
-\textbf{Databases:} MySQL, MongoDB\\
-\textbf{Engineering:} OOP, Data Structures, Algorithms, System Design, Monitoring, Debugging, Production Workflows
-
-\section*{Experience}
-\textbf{{{CURRENT_COMPANY}}} \hfill {{CURRENT_TITLE}}\\
-\textit{Backend systems, production workflows, analytics-driven engineering}\\
-\begin{itemize}
-\item Improved production workflows by debugging data/application issues and coordinating reliable fixes across engineering and business stakeholders, contributing to {{NMV}}.
-\item Optimized recurring API and data workflows using structured monitoring, root-cause analysis, and automation-oriented execution, contributing to {{RETENTION}}.
-\item Built scalable operational solutions with measurable impact on reliability, turnaround time, and process efficiency, contributing to {{REVENUE}}.
-\end{itemize}
-
-\section*{Projects}
-\textbf{Product Backend Project}\\
-\begin{itemize}
-\item Built backend-first product workflows using REST APIs, database integration, validation, and clean service boundaries.
-\item Improved product reliability and iteration speed through structured debugging and maintainable backend design.
-\end{itemize}
-
-\textbf{API Optimization Project}\\
-\begin{itemize}
-\item Improved API performance and operational correctness using indexing, payload tuning, and edge-case handling.
-\end{itemize}
-
-\section*{Competitive Programming}
-{{ACHIEVEMENTS}}
-
 \section*{Education}
 {{EDUCATION}}
+
+\section*{Experience}
+{{EXPERIENCE}}
+
+\section*{Projects}
+{{PROJECTS}}
+
+\section*{Technical Skills}
+{{SKILLS}}
+
+\section*{Achievements}
+{{ACHIEVEMENTS}}
 
 \end{document}

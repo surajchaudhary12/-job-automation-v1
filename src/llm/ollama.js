@@ -5,14 +5,14 @@ const { candidateProfile, rootDir } = require("../config");
 const { log } = require("../logging/logger");
 
 const DEFAULT_MODEL = "qwen2.5-coder:14b";
-const FALLBACK_MODELS = ["llama3.1", "deepseek-coder", "mistral"];
+const FALLBACK_MODELS = ["qwen2.5-coder:7b", "llama3.1", "deepseek-coder", "mistral"];
 
 function enabled() {
   return String(process.env.OLLAMA_ENABLED || "true").toLowerCase() !== "false";
 }
 
-function geminiUrl() {
-  return process.env.GEMINI_API_URL || "http://localhost:11434";
+function ollamaUrl() {
+  return process.env.OLLAMA_URL || "http://localhost:11434";
 }
 
 function cacheDir() {
@@ -44,7 +44,20 @@ function compactProfile() {
     positioning: profile.positioning,
     skills: profile.skills,
     achievements: profile.achievements,
-    metrics: profile.metrics
+    metrics: profile.metrics,
+    disallowed_titles: [
+      "Business Analyst",
+      "Frontend engineer",
+      "AI researcher",
+      "DevOps engineer"
+    ],
+    preferred_roles: [
+      "Backend engineering",
+      "Java/C++",
+      "Systems",
+      "Platform",
+      "Product engineering"
+    ]
   };
 }
 
@@ -65,7 +78,7 @@ function extractJson(content) {
     return JSON.parse(text);
   } catch {
     const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("Gemini response did not contain JSON");
+    if (!match) throw new Error("Ollama response did not contain JSON");
     return JSON.parse(match[0]);
   }
 }
@@ -80,15 +93,13 @@ async function withTimeout(promise, timeoutMs) {
   }
 }
 
-async function callGemini({ model, system, user, temperature = 0.1, timeoutMs }) {
-  console.log('Gemini request started');
+async function callOllama({ model, system, user, temperature = 0.1, timeoutMs }) {
   const started = Date.now();
-  const response = await withTimeout((signal) => fetch(`${geminiUrl()}/api/chat`, {
+  const response = await withTimeout((signal) => fetch(`${ollamaUrl()}/api/chat`, {
     method: "POST",
     signal,
     headers: { 
-      "Content-Type": "application/json", 
-      "Authorization": `Bearer ${process.env.GEMINI_API_KEY}`
+      "Content-Type": "application/json"
     },
     body: JSON.stringify({
       model,
@@ -107,8 +118,7 @@ async function callGemini({ model, system, user, temperature = 0.1, timeoutMs })
 
   if (!response.ok) {
     const body = await response.text();
-    console.error('Gemini request failure', error);
-    throw new Error(`Gemini ${model} failed ${response.status}: ${body.slice(0, 300)}`);
+    throw new Error(`Ollama ${model} failed ${response.status}: ${body.slice(0, 300)}`);
   }
 
   const data = await response.json();
@@ -120,14 +130,14 @@ async function callGemini({ model, system, user, temperature = 0.1, timeoutMs })
     wall_ms: Date.now() - started
   };
 
-  console.log('Gemini response received');
   return { json: extractJson(data.message?.content), usage };
 }
 
 async function chatJson({ system, user, strong = false, temperature = 0.1, timeoutMs }) {
   if (!enabled()) return null;
 
-  const primary = strong ? (process.env.GEMINI_STRONG_MODEL || DEFAULT_MODEL) : (process.env.GEMINI_MODEL || DEFAULT_MODEL);
+  const primary = (strong ? process.env.OLLAMA_STRONG_MODEL : process.env.OLLAMA_MODEL) || DEFAULT_MODEL;
+  log("llm.ollama.debug", { primary, env: process.env.OLLAMA_MODEL, DEFAULT_MODEL });
   const models = [primary, ...FALLBACK_MODELS.filter((item) => item !== primary)];
   const payload = { system, user, strong, temperature, primary };
   const key = cacheKey(payload);
@@ -135,34 +145,41 @@ async function chatJson({ system, user, strong = false, temperature = 0.1, timeo
   if (cached) return { ...cached, cached: true };
 
   let lastError = null;
-  const retries = Number(process.env.GEMINI_RETRIES || 2);
-  const timeout = timeoutMs || Number(process.env.GEMINI_TIMEOUT_MS || 90000);
+  const retries = Number(process.env.OLLAMA_RETRIES || 2);
+  const timeout = timeoutMs || Number(process.env.OLLAMA_TIMEOUT_MS || 90000);
 
   for (const model of models) {
     for (let attempt = 1; attempt <= retries; attempt += 1) {
       try {
-        const result = await callGemini({ model, system, user, temperature, timeoutMs: timeout });
+        const result = await callOllama({ model, system, user, temperature, timeoutMs: timeout });
         writeCache(key, result);
-        log("llm.gemini.complete", { model, cached: false, wall_ms: result.usage.wall_ms });
+        log("llm.ollama.complete", { model, cached: false, wall_ms: result.usage.wall_ms });
         return result;
       } catch (error) {
         lastError = error;
-        log("llm.gemini.failed", { model, attempt, error: error.message });
+        log("llm.ollama.failed", { model, attempt, error: error.message });
       }
     }
   }
 
-  throw lastError || new Error("Gemini inference failed");
+  throw lastError || new Error("Ollama inference failed");
 }
 
 async function enhanceFitScore(job, heuristicScore) {
   return chatJson({
-    system: "Return compact JSON only. Score backend job fit for the candidate. Be conservative. Never use disallowed titles.",
+    system: "Return compact JSON only. You are a senior technical recruiter scoring a backend job fit for a specific candidate. Be conservative and critical. Prioritize backend engineering, Java/C++, and strong engineering cultures. Auto-reject if mandatory experience exceeds 6 years or if the role is frontend-heavy or pure DevOps.",
     user: JSON.stringify({
-      task: "Return fit_score, compensation_probability, career_upside, interview_probability, priority, risks.",
+      task: "Analyze the job description and candidate profile. Return a JSON object with: fit_score (0-10), compensation_probability ('High', 'Medium', 'Low'), career_upside ('High', 'Medium', 'Low'), interview_probability ('High', 'Medium', 'Low'), priority ('High', 'Medium', 'Low'), and risks (list of strings).",
       candidate: compactProfile(),
       heuristic_score: heuristicScore,
-      job: compactJob(job)
+      job: compactJob(job),
+      criteria: [
+        "Skill match: Java, Spring Boot, C++, Systems, DSA",
+        "Experience realism: Suraj is an Analyst with 20 LPA, don't score Staff/Principal roles high unless they are reachable.",
+        "Compensation: Must likely exceed 20 LPA (prefer > 25 LPA).",
+        "Targeting: Backend, Platform, Systems, Product companies.",
+        "Red flags: Service companies, weak engineering culture, pure frontend, 6+ YOE mandatory."
+      ]
     })
   });
 }
@@ -178,13 +195,13 @@ async function extractAtsDeltas(job) {
   });
 }
 
-async function tailorResumeDeltas(job) {
+async function tailorResumeDeltas(job) { 
   return chatJson({
     strong: true,
-    system: "Return compact JSON only. Mutate resume deltas only. Do not invent experience, companies, or technologies.",
+    system: "Return compact JSON only. Tailor resume deltas using only supplied candidate facts. Do not invent or alter experience, companies, titles, dates, technologies, metrics, or outcomes. Keep the candidate's current title as Analyst. Every numeric claim in the summary must exactly match the profile.",
     user: JSON.stringify({
-      task: "Return summary, ordered_skills, project_order, keywords. Keep ATS one-page style.",
-      candidate: compactProfile(),
+      task: "Return a concise 1-2 sentence summary, ordered_skills, project_order, and keywords. Only list skills and projects that exactly exist in the candidate profile; order them by relevance to the job. Keep ATS one-page style.",
+      candidate: candidateProfile(),
       job: compactJob(job)
     })
   });
@@ -203,4 +220,17 @@ async function recruiterOutreach(job) {
   });
 }
 
-module.exports = { enabled, enhanceFitScore, extractAtsDeltas, tailorResumeDeltas, recruiterOutreach };
+async function answerApplicationQuestions(job, questions) {
+  return chatJson({
+    system: "Return compact JSON only. Answer application questions for the candidate. Be professional and technical. Do not invent experience.",
+    user: JSON.stringify({
+      task: "Return an object where keys are question IDs/labels and values are concise answers.",
+      candidate: compactProfile(),
+      job: compactJob(job),
+      questions
+    }),
+    timeoutMs: 60000
+  });
+}
+
+module.exports = { enabled, enhanceFitScore, extractAtsDeltas, tailorResumeDeltas, recruiterOutreach, answerApplicationQuestions };

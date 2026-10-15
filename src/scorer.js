@@ -42,6 +42,7 @@ function estimateComp(job) {
   const max = numbers.length ? Math.max(...numbers) : 0;
   if (max >= 35) return "High: likely above current 20 LPA";
   if (max >= 20) return "Medium: likely around or above current 20 LPA";
+  if (numbers.length === 0) return "Potential: No compensation hint provided";
   return "Low: possible downgrade risk";
 }
 
@@ -58,15 +59,16 @@ function scoreJob(job) {
   score -= rejectMatches * 1.4;
   score = Math.max(1, Math.min(10, Number(score.toFixed(1))));
 
+  const comp = estimateComp(job);
   const autoReject =
-    score < 7 ||
+    score < 6.5 ||
     /frontend-heavy|pure frontend|react role/i.test(text) ||
     /6\+ years mandatory|mandatory 6\+|senior sre|sre role/i.test(text) ||
-    estimateComp(job).startsWith("Low");
+    comp.startsWith("Low");
 
   return {
     fit_score: score,
-    compensation_probability: estimateComp(job),
+    compensation_probability: comp,
     career_upside: score >= 8 ? "High" : score >= 7 ? "Medium" : "Low",
     interview_probability: score >= 8 ? "Medium-High" : score >= 7 ? "Medium" : "Low",
     priority: score >= 8 ? "High" : score >= 7 ? "Medium" : "Low",
