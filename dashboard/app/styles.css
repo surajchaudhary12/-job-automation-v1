@@ -1,13 +1,11 @@
 @import "tailwindcss";
 
-:root {
-  color-scheme: dark;
-}
+:root { color-scheme: light; }
 
 body {
   margin: 0;
-  background: #09090b;
-  color: #e4e4e7;
+  background: #f7f8f5;
+  color: #1c1917;
 }
 
 * {
@@ -16,6 +14,60 @@ body {
 
 button, input, select, textarea {
   font: inherit;
+}
+
+.job-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.125rem 1.25rem;
+}
+
+.job-title {
+  color: #1c1917;
+  font-weight: 600;
+  transition: color 150ms ease;
+}
+
+.job-title:hover { color: #047857; }
+
+.icon-button {
+  display: inline-flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  color: #78716c;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.icon-button:hover { background: #f5f5f4; color: #1c1917; }
+
+.action-button {
+  display: inline-flex;
+  min-width: 6.25rem;
+  height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 0.5rem;
+  padding: 0 0.875rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.action-primary { background: #047857; color: white; }
+.action-primary:hover { background: #065f46; }
+.action-primary:disabled { cursor: wait; opacity: 0.6; }
+.action-secondary { border: 1px solid #e7e5e4; background: white; color: #44403c; }
+.action-secondary:hover { background: #f5f5f4; }
+.action-done { border: 1px solid #d1fae5; background: #ecfdf5; color: #047857; }
+
+@media (max-width: 640px) {
+  .job-card { align-items: flex-start; flex-direction: column; padding: 1rem; }
+  .job-card > :last-child { width: 100%; justify-content: flex-end; }
 }
 
 .status-discovered {
