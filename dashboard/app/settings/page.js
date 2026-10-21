@@ -49,58 +49,64 @@ export default function ApplicationSettingsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-950 p-4 text-zinc-100 lg:p-8">
-      <div className="mx-auto max-w-2xl space-y-6">
-        <a href="/" className="text-sm text-teal-300 hover:text-teal-200">← Back to applications</a>
+    <main className="min-h-screen bg-[#f7f8f5] p-4 text-stone-900 sm:p-8">
+      <div className="mx-auto max-w-2xl space-y-7">
+        <a href="/" className="text-sm font-medium text-emerald-700 hover:text-emerald-900">← Back to jobs</a>
         <header>
-          <h1 className="text-3xl font-semibold">Application preferences</h1>
-          <p className="mt-2 text-sm text-zinc-400">Set your current annual salary once. The expected salary is calculated from your target hike for each application.</p>
+          <p className="mb-2 text-sm font-medium text-emerald-700">Preferences</p>
+          <h1 className="text-3xl font-semibold tracking-tight">Set your application defaults.</h1>
+          <p className="mt-2 text-sm leading-6 text-stone-600">Your salary target is calculated automatically and reused for each application.</p>
         </header>
-        <form onSubmit={save} className="space-y-5 rounded-xl border border-zinc-800 bg-zinc-900/70 p-5">
-          <label className="block text-sm text-zinc-300">
-            Currency
-            <select value={currency} onChange={(event) => setCurrency(event.target.value)} className="mt-2 h-11 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-zinc-100">
-              <option value="INR">INR — Indian rupee</option>
-              <option value="USD">USD — US dollar</option>
-              <option value="EUR">EUR — Euro</option>
-              <option value="GBP">GBP — British pound</option>
-            </select>
+        <form onSubmit={save} className="space-y-6 rounded-xl border border-stone-200 bg-white p-5 sm:p-7">
+          <div className="grid gap-5 sm:grid-cols-2">
+          <label className="block text-sm font-medium text-stone-700">
+            Current annual salary
+            <input required min="1" type="number" step="1" value={currentAnnual} onChange={(event) => setCurrentAnnual(event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-stone-200 bg-white px-3 text-stone-900 outline-none focus:border-emerald-700" />
           </label>
-          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-700 bg-zinc-950 p-4 text-sm text-zinc-200">
-            <input type="checkbox" checked={scheduledAutoApply} onChange={(event) => setScheduledAutoApply(event.target.checked)} className="mt-1 accent-teal-500" />
+          <label className="block text-sm font-medium text-stone-700">
+            Expected hike
+            <div className="mt-2 flex h-11 items-center rounded-lg border border-stone-200 bg-white pr-3 focus-within:border-emerald-700">
+              <input required min="0" max="300" type="number" step="0.1" value={hikePercent} onChange={(event) => setHikePercent(event.target.value)} className="h-full w-full bg-transparent px-3 text-stone-900 outline-none" />
+              <span className="text-stone-400">%</span>
+            </div>
+          </label>
+          </div>
+          <div className="rounded-lg bg-emerald-50 px-4 py-3.5">
+            <p className="text-xs font-medium text-emerald-800">Expected annual salary</p>
+            <p className="mt-1 text-2xl font-semibold tracking-tight text-stone-900">{money(expectedAnnual, currency)}</p>
+          </div>
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-stone-200 p-4 text-sm text-stone-800 transition hover:border-stone-300">
+            <input type="checkbox" checked={scheduledAutoApply} onChange={(event) => setScheduledAutoApply(event.target.checked)} className="mt-1 accent-emerald-700" />
             <span>
-              <span className="block font-medium">Enable scheduled auto-apply</span>
-              <span className="mt-1 block text-xs text-zinc-400">When the scheduler is running, it will apply every 15 minutes to roles that pass your score, compensation, role-fit, and supported-site checks. CAPTCHA and unanswered required questions stop for review.</span>
+              <span className="block font-medium">Apply to matching jobs automatically</span>
+              <span className="mt-1 block text-xs leading-5 text-stone-500">Runs every 15 minutes while the scheduler is on. CAPTCHA and unanswered questions pause for your review.</span>
             </span>
           </label>
-          <label className="block text-sm text-zinc-300">
-            Current annual salary
-            <input required min="1" type="number" step="1" value={currentAnnual} onChange={(event) => setCurrentAnnual(event.target.value)} className="mt-2 h-11 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-zinc-100" />
-          </label>
-          <label className="block text-sm text-zinc-300">
-            Expected hike
-            <div className="mt-2 flex h-11 items-center rounded-md border border-zinc-700 bg-zinc-950 pr-3 focus-within:border-teal-600">
-              <input required min="0" max="300" type="number" step="0.1" value={hikePercent} onChange={(event) => setHikePercent(event.target.value)} className="h-full w-full bg-transparent px-3 text-zinc-100 outline-none" />
-              <span className="text-zinc-500">%</span>
+          <details className="group border-t border-stone-100 pt-4">
+            <summary className="cursor-pointer list-none text-sm font-medium text-stone-600 marker:hidden">Advanced matching <span className="ml-1 text-stone-400 group-open:hidden">+</span><span className="ml-1 hidden text-stone-400 group-open:inline">−</span></summary>
+            <div className="mt-4 space-y-4">
+              <label className="block text-sm font-medium text-stone-700">
+                Minimum fit score for auto-apply
+                <div className="mt-2 flex h-11 items-center rounded-lg border border-stone-200 bg-white pr-3 focus-within:border-emerald-700">
+                  <input required min="0" max="10" type="number" step="0.1" value={fitThreshold} onChange={(event) => setFitThreshold(event.target.value)} className="h-full w-full bg-transparent px-3 text-stone-900 outline-none" />
+                  <span className="text-stone-400">/ 10</span>
+                </div>
+                <span className="mt-1 block text-xs font-normal text-stone-500">Lower scores include more roles. Other eligibility checks still apply.</span>
+              </label>
+              <label className="block text-sm font-medium text-stone-700">
+                Currency
+                <select value={currency} onChange={(event) => setCurrency(event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-stone-200 bg-white px-3 text-stone-900 outline-none focus:border-emerald-700">
+                  <option value="INR">INR — Indian rupee</option><option value="USD">USD — US dollar</option><option value="EUR">EUR — Euro</option><option value="GBP">GBP — British pound</option>
+                </select>
+              </label>
             </div>
-          </label>
-          <label className="block text-sm text-zinc-300">
-            Minimum fit score for auto-apply
-            <div className="mt-2 flex h-11 items-center rounded-md border border-zinc-700 bg-zinc-950 pr-3 focus-within:border-teal-600">
-              <input required min="0" max="10" type="number" step="0.1" value={fitThreshold} onChange={(event) => setFitThreshold(event.target.value)} className="h-full w-full bg-transparent px-3 text-zinc-100 outline-none" />
-              <span className="text-zinc-500">/ 10</span>
-            </div>
-            <span className="mt-1 block text-xs text-zinc-500">Set by a person. Lower scores make more roles eligible; other checks still apply.</span>
-          </label>
-          <div className="rounded-lg border border-teal-900 bg-teal-500/10 p-4">
-            <p className="text-xs uppercase tracking-wide text-teal-200">Expected annual salary</p>
-            <p className="mt-1 text-2xl font-semibold text-white">{money(expectedAnnual, currency)}</p>
-            <p className="mt-1 text-xs text-zinc-400">Calculated as current salary × (1 + hike ÷ 100)</p>
+          </details>
+          <div className="flex flex-wrap items-center gap-4 border-t border-stone-100 pt-5">
+            <button disabled={busy} className="h-10 rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-60">{busy ? "Saving…" : "Save preferences"}</button>
+            {message ? <p role="status" className="text-sm text-stone-600">{message}</p> : null}
           </div>
-          <button disabled={busy} className="h-10 rounded-md bg-teal-500 px-4 text-sm font-semibold text-zinc-950 disabled:opacity-60">{busy ? "Saving…" : "Save preferences"}</button>
-          {message ? <p role="status" className="text-sm text-zinc-300">{message}</p> : null}
         </form>
-        <p className="text-xs text-zinc-500">The CAPTCHA step is handled as a human checkpoint. The browser will pause for you when a site requires it.</p>
+        <p className="text-xs text-stone-500">Applications pause when a CAPTCHA or a required question needs your input.</p>
       </div>
     </main>
   );
