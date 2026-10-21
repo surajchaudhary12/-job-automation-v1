@@ -1,4 +1,4 @@
-﻿const path = require("path");
+const path = require("path");
 const { envFlag } = require("../config");
 const { launchPersistentProfile } = require("../browser/session");
 const { warmPage, humanDelay } = require("../browser/humanBehavior");
@@ -8,26 +8,67 @@ const { handleLever } = require("./ats/lever");
 const { handleLinkedInEasyApply } = require("./ats/linkedin");
 const { handleInstahyre } = require("./ats/instahyre");
 const { handleWellfound } = require("./ats/wellfound");
+const { runJavaApply } = require("./javaWorker");
+const { createApplyAttempt, recordApplyProgress, finishApplyAttempt } = require("../db/applyAttempts");
 
 async function prepareApply(job, resume, options = {}) {
-  const gate = evaluateAutoSubmit(job, { autoSubmit: options.autoSubmit ?? envFlag("AUTO_SUBMIT", false), threshold: options.threshold });
+  const jobUrl = job.url || job.URL || "";
+  const jobHost = (() => { try { return new URL(jobUrl).hostname.toLowerCase(); } catch { return ""; } })();
+  const source = jobHost === "keka.com" || jobHost.endsWith(".keka.com") ? "keka"
+    : jobHost === "ashbyhq.com" || jobHost.endsWith(".ashbyhq.com") ? "ashby"
+      : String(job.source || "").toLowerCase();
+  const normalizedJob = { ...job, source };
+  const gate = evaluateAutoSubmit(normalizedJob, { autoSubmit: options.autoSubmit ?? envFlag("AUTO_SUBMIT", false), threshold: options.threshold });
   const confidence = gate.confidence;
-  const source = gate.source;
   const artifactName = `${String(job.company || "job").replace(/[^a-z0-9]+/gi, "_")}_${Date.now()}`;
+  const attemptId = await createApplyAttempt(normalizedJob, resume, gate);
+  let navigationInfo = {};
 
-  const context = await launchPersistentProfile(
-    (source === "linkedin" || source === "wellfound" || source === "instahyre") ? source : "default",
-    {
+  async function finalizeAttempt(result) {
+    const completed = { ...result, gate };
+    await finishApplyAttempt(attemptId, { ...completed, ...navigationInfo });
+    return completed;
+  }
+
+  if (["greenhouse", "lever", "keka", "ashby"].includes(source) && envFlag("JAVA_APPLY_ENABLED", true)) {
+    await recordApplyProgress(attemptId, { at: new Date().toISOString(), stage: "java_worker_starting", message: "Starting Java application worker" });
+    const result = await runJavaApply(normalizedJob, resume, {
+      autoSubmit: gate.canAutoSubmit,
       headless: options.headless,
-    },
-  );
-  const page = await context.newPage();
+      attemptId
+    });
+    const status = result.status === "submitted" ? "applied" : result.status;
+    return finalizeAttempt({ ...result, status });
+  }
 
+  let context;
   try {
-    await page.goto(job.url || job.URL, {
+    await recordApplyProgress(attemptId, { at: new Date().toISOString(), stage: "browser_launching", message: "Starting browser profile" });
+    context = await launchPersistentProfile(
+      (source === "linkedin" || source === "wellfound" || source === "instahyre") ? source : "default",
+      { headless: options.headless }
+    );
+    const page = await context.newPage();
+    const entryUrl = job.url || job.URL || "";
+    await recordApplyProgress(attemptId, { at: new Date().toISOString(), stage: "navigation_started", message: "Opening job destination", details: { entryUrl } });
+    const response = await page.goto(entryUrl, {
       waitUntil: "domcontentloaded",
       timeout: 60000,
     });
+    const finalUrl = page.url();
+    const entryHost = (() => { try { return new URL(entryUrl).host; } catch { return ""; } })();
+    const finalHost = (() => { try { return new URL(finalUrl).host; } catch { return ""; } })();
+    navigationInfo = {
+      entryHost,
+      finalUrl,
+      finalHost,
+      navigationHttpStatus: response?.status() ?? null,
+      pageReached: Boolean(finalUrl),
+      redirected: Boolean(finalUrl && finalUrl !== entryUrl),
+      externalRedirect: Boolean(entryHost && finalHost && entryHost.toLowerCase() !== finalHost.toLowerCase()),
+      pageTitle: await page.title().catch(() => "")
+    };
+    await recordApplyProgress(attemptId, { at: new Date().toISOString(), stage: "navigation_reached", message: "Job page loaded in browser", details: { entryUrl, ...navigationInfo } });
     await warmPage(page);
 
     const canAutoSubmit = gate.canAutoSubmit;
@@ -47,7 +88,7 @@ async function prepareApply(job, resume, options = {}) {
           screenshotPath = "";
         }
       }
-      return { ...result, screenshotPath, gate };
+      return finalizeAttempt({ ...result, screenshotPath, ...navigationInfo });
     }
 
     function normalizeResultStatus(result) {
@@ -105,12 +146,12 @@ async function prepareApply(job, resume, options = {}) {
       return await finalize({ status: "prepared", submitted: false });
     } catch (error) {
       console.error(`Failed to apply for ${job.company}:`, error.message);
-      return await finalize({ status: "failed", submitted: false, error: error.message });
+      return await finalizeAttempt({ status: "failed", submitted: false, error: error.message, stage: "browser_error", ...navigationInfo });
     }
   } finally {
-    if (options.keepOpen) {
+    if (options.keepOpen && context) {
         // Do not close context if user wants to review
-    } else {
+    } else if (context) {
         await context.close();
     }
   }

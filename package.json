@@ -16,6 +16,8 @@
     "dashboard": "next dev dashboard --webpack",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
+    "java:build": "node scripts/java-maven.js package",
+    "java:install-browser": "java -cp java-apply/target/java-apply-1.0.0.jar com.microsoft.playwright.CLI install chromium",
     "test": "node src/demo.js"
   },
   "keywords": [],

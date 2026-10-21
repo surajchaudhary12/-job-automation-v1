@@ -19,15 +19,15 @@ enum ApplicationStatus {
 }
 
 model JobSource {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   name        String
   url         String?
-  type        String   // e.g., "greenhouse", "lever", "linkedin"
-  isEnabled   Boolean  @default(true)
+  type        String // e.g., "greenhouse", "lever", "linkedin"
+  isEnabled   Boolean   @default(true)
   lastFetched DateTime?
-  config      Json?    // Stores specific config like board tokens
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  config      Json? // Stores specific config like board tokens
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   jobs        Job[]
 
   @@map("job_sources")
@@ -40,8 +40,8 @@ model Job {
   jd             String
   url            String        @unique
   location       String?
-  source         String        // Kept for backward compatibility
-  sourceId       String?       // Relation to JobSource
+  source         String // Kept for backward compatibility
+  sourceId       String? // Relation to JobSource
   jobSource      JobSource?    @relation(fields: [sourceId], references: [id])
   salaryEstimate String?
   fitScore       Float?
@@ -49,7 +49,7 @@ model Job {
   careerUpside   String?
   interviewProb  String?
   status         String        @default("active") // "active", "expired", "filled"
-  raw            Json?         // Original response from source
+  raw            Json? // Original response from source
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   applications   Application[]
@@ -61,27 +61,65 @@ model Job {
 }
 
 model Application {
-  id          String            @id @default(cuid())
-  jobId       String?
-  job         Job?              @relation(fields: [jobId], references: [id])
-  company     String
-  role        String
-  url         String
-  status      ApplicationStatus @default(discovered)
-  fitScore    Float?
+  id                   String            @id @default(cuid())
+  jobId                String?
+  job                  Job?              @relation(fields: [jobId], references: [id])
+  company              String
+  role                 String
+  url                  String
+  status               ApplicationStatus @default(discovered)
+  fitScore             Float?
   compensationEstimate String?
-  dateApplied DateTime?
-  recruiterId String?
-  recruiter   Recruiter?        @relation(fields: [recruiterId], references: [id])
-  resumeId    String?
-  resume      Resume?           @relation(fields: [resumeId], references: [id])
-  notes       String?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  dateApplied          DateTime?
+  recruiterId          String?
+  recruiter            Recruiter?        @relation(fields: [recruiterId], references: [id])
+  resumeId             String?
+  resume               Resume?           @relation(fields: [resumeId], references: [id])
+  notes                String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
 
   @@unique([company, role])
   @@index([status])
   @@map("applications")
+}
+
+model ApplyAttempt {
+  id                    String    @id @default(cuid())
+  company               String
+  designation           String
+  jobUrl                String    @map("job_url")
+  source                String
+  location              String?
+  fitScore              Float?    @map("fit_score")
+  compensationEstimate  String?   @map("compensation_estimate")
+  resumePath            String?   @map("resume_path")
+  status                String    @default("running")
+  stage                 String    @default("queued")
+  entryUrl              String?   @map("entry_url")
+  finalUrl              String?   @map("final_url")
+  entryHost             String?   @map("entry_host")
+  finalHost             String?   @map("final_host")
+  navigationHttpStatus  Int?      @map("navigation_http_status")
+  pageReached           Boolean   @default(false) @map("page_reached")
+  redirected            Boolean   @default(false)
+  externalRedirect      Boolean   @default(false) @map("external_redirect")
+  pageTitle             String?   @map("page_title")
+  screenshotPath        String?   @map("screenshot_path")
+  missingRequiredFields Json?     @map("missing_required_fields")
+  metadata              Json?
+  events                Json?
+  error                 String?
+  startedAt             DateTime  @default(now()) @map("started_at")
+  finishedAt            DateTime? @map("finished_at")
+  submittedAt           DateTime? @map("submitted_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@index([status, startedAt])
+  @@index([company, designation])
+  @@index([source, startedAt])
+  @@map("apply_attempts")
 }
 
 model Recruiter {
@@ -110,17 +148,17 @@ model Resume {
 }
 
 model Run {
-  id              String   @id @default(cuid())
-  mode            String
-  discoveredCount Int      @default(0)
-  shortlistedCount Int     @default(0)
-  preparedCount   Int      @default(0)
-  appliedCount    Int      @default(0)
-  llmPromptTokens Int      @default(0)
-  llmCompletionTokens Int  @default(0)
-  estimatedCostUsd Float   @default(0)
-  summary          String?
-  createdAt        DateTime @default(now())
+  id                  String   @id @default(cuid())
+  mode                String
+  discoveredCount     Int      @default(0)
+  shortlistedCount    Int      @default(0)
+  preparedCount       Int      @default(0)
+  appliedCount        Int      @default(0)
+  llmPromptTokens     Int      @default(0)
+  llmCompletionTokens Int      @default(0)
+  estimatedCostUsd    Float    @default(0)
+  summary             String?
+  createdAt           DateTime @default(now())
 
   @@map("daily_runs")
 }

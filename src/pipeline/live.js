@@ -1,9 +1,9 @@
-const { rootDir, envFlag, envNumber } = require("../config");
+const { rootDir, envFlag, envNumber, applicationPreferences } = require("../config");
 const { discoverJobs } = require("../jobs");
 const { scoreJob } = require("../scorer");
 const { generateResume } = require("../resume");
 const { recruiterMessage } = require("../outreach");
-const { upsertApplication } = require("../tracker");
+const { upsertApplication, readTracker } = require("../tracker");
 const { storeApplication, storeRun } = require("../db/store");
 const { disconnectPrisma } = require("../db/prisma");
 const llm = require("../llm/index");
@@ -40,11 +40,17 @@ async function runLivePipeline(options = {}) {
   const liveApply = options.prepareApply ?? envFlag("LIVE_APPLY", false);
   const autoSubmit = options.autoSubmit ?? envFlag("AUTO_SUBMIT", false);
   const useLlm = options.useLlm ?? llm.enabled();
-  const autoApplyThreshold = envNumber("AUTO_APPLY_THRESHOLD", 7);
+  const configuredThreshold = Number(applicationPreferences().auto_apply_fit_threshold);
+  const autoApplyThreshold = options.autoApplyThreshold ?? (Number.isFinite(configuredThreshold) ? configuredThreshold : envNumber("AUTO_APPLY_THRESHOLD", 8.5));
   const usages = [];
 
   log("run.start", { mode: "live", limit, useLlm, liveApply, autoSubmit, autoApplyThreshold });
-  const jobs = options.jobs || await discoverJobs({ limit });
+  const jobs = options.jobs || await discoverJobs({
+    limit,
+    queries: options.discoveryQueries,
+    platforms: options.discoveryPlatforms,
+    includeAts: options.includeAts
+  });
   log("discovery.complete", { count: jobs.length });
 
   const results = [];
@@ -53,6 +59,18 @@ async function runLivePipeline(options = {}) {
 
   for (const job of jobs) {
     if (preparedCount >= maxApplications) break;
+
+    const priorSubmission = readTracker(root).find((item) =>
+      (["APPLIED", "SUBMISSION_UNCONFIRMED"].includes(String(item.status || "").toUpperCase())) &&
+      ((item.URL || item.url) && (item.URL || item.url) === (job.url || job.URL) ||
+        (item.company || "").toLowerCase() === (job.company || "").toLowerCase() &&
+        (item.role || "").toLowerCase() === (job.title || job.role || "").toLowerCase())
+    );
+    if (priorSubmission) {
+      log("apply.skip", { company: job.company, title: job.title, reason: `prior submission recorded as ${priorSubmission.status}` });
+      results.push({ ...priorSubmission, priority: "Previously submitted" });
+      continue;
+    }
     
     let status = "DISCOVERED";
 
@@ -114,7 +132,7 @@ async function runLivePipeline(options = {}) {
       }
     }
 
-    const autoSubmitGate = evaluateAutoSubmit({ ...job, fit_score: score.fit_score }, { autoSubmit, threshold: autoApplyThreshold });
+    const autoSubmitGate = evaluateAutoSubmit({ ...job, fit_score: score.fit_score, compensation_probability: score.compensation_probability }, { autoSubmit, threshold: autoApplyThreshold });
     const shouldAutoApply = score.fit_score >= autoApplyThreshold && Boolean(resume.pdfPath);
     if (shouldTailor && !shouldAutoApply) {
         status = "REVIEW_REQUIRED";
@@ -150,15 +168,20 @@ async function runLivePipeline(options = {}) {
     if (liveApply && shouldTailor && shouldAutoApply) {
       log("pipeline.stage", { company: job.company, stage: "APPLYING", message: "Executing platform application" });
       entry.status = "APPLYING";
-      const prepared = await prepareApply({ ...job, fit_score: score.fit_score }, resume, { autoSubmit, threshold: autoApplyThreshold });
+      const prepared = await prepareApply({ ...job, fit_score: score.fit_score, compensation_probability: score.compensation_probability }, resume, { autoSubmit, threshold: autoApplyThreshold });
       if (prepared?.screenshotPath) {
         entry.application_screenshot = prepared.screenshotPath;
       }
+      if (prepared?.submittedAt) entry.date_applied = prepared.submittedAt;
+      if (prepared?.message) entry.apply_result = prepared.message;
       if (prepared?.missingRequiredFields?.length) {
         entry.notes = `${entry.notes} | Missing required fields: ${prepared.missingRequiredFields.join(", ")}`;
       }
       
-      if (prepared.status === "prepared") {
+      if (prepared.status === "review_required" && /submit was clicked/i.test(prepared.message || "")) {
+         entry.status = "SUBMISSION_UNCONFIRMED";
+         preparedCount += 1;
+      } else if (prepared.status === "prepared") {
          entry.status = "REVIEW_REQUIRED";
          preparedCount += 1;
       } else if (prepared.status === "review_required") {

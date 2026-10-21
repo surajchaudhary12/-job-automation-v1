@@ -1,4 +1,5 @@
 node_modules/
+java-apply/target/
 .env
 profiles/
 logs/
