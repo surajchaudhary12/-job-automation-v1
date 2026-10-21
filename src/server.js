@@ -19,7 +19,7 @@ aggregationScheduler.start();
 const app = express();
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", process.env.DASHBOARD_ORIGIN || "http://localhost:3000");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,PUT,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Access-Control-Expose-Headers", "X-Resume-Pdf-Path, X-Resume-Tex-Path");
   if (req.method === "OPTIONS") return res.sendStatus(204);
@@ -30,6 +30,43 @@ app.use(express.json());
 app.use("/api/aggregation", aggregationRoutes);
 
 app.get("/health", (req, res) => res.json({ ok: true }));
+
+app.get("/api/settings/application", (req, res) => {
+  try {
+    const profile = JSON.parse(fs.readFileSync(path.join(rootDir(), "config", "candidate_profile.json"), "utf8"));
+    const compensation = profile.application_preferences?.compensation || {};
+    const fitThreshold = Number(profile.application_preferences?.auto_apply_fit_threshold ?? 7);
+    const scheduledAutoApply = profile.application_preferences?.scheduled_auto_apply_enabled === true;
+    const currentAnnual = Number(compensation.currentAnnual || 0);
+    const hikePercent = Number(compensation.hikePercent || 0);
+    res.json({ currency: compensation.currency || "INR", currentAnnual, hikePercent, expectedAnnual: Math.round(currentAnnual * (1 + hikePercent / 100)), fitThreshold, scheduledAutoApply });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put("/api/settings/application", (req, res) => {
+  const currency = String(req.body?.currency || "INR").toUpperCase();
+  const currentAnnual = Number(req.body?.currentAnnual);
+  const hikePercent = Number(req.body?.hikePercent);
+  const fitThreshold = Number(req.body?.fitThreshold);
+  const scheduledAutoApply = req.body?.scheduledAutoApply === true;
+  if (!/^[A-Z]{3}$/.test(currency) || !Number.isFinite(currentAnnual) || currentAnnual <= 0 || !Number.isFinite(hikePercent) || hikePercent < 0 || hikePercent > 300 || !Number.isFinite(fitThreshold) || fitThreshold < 0 || fitThreshold > 10) {
+    return res.status(400).json({ error: "Enter a valid currency, current annual salary, hike from 0% to 300%, and fit threshold from 0 to 10." });
+  }
+  try {
+    const profilePath = path.join(rootDir(), "config", "candidate_profile.json");
+    const profile = JSON.parse(fs.readFileSync(profilePath, "utf8"));
+    profile.application_preferences = profile.application_preferences || {};
+    profile.application_preferences.compensation = { currency, currentAnnual: Math.round(currentAnnual), hikePercent };
+    profile.application_preferences.auto_apply_fit_threshold = fitThreshold;
+    profile.application_preferences.scheduled_auto_apply_enabled = scheduledAutoApply;
+    fs.writeFileSync(profilePath, `${JSON.stringify(profile, null, 2)}\n`, "utf8");
+    res.json({ currency, currentAnnual: Math.round(currentAnnual), hikePercent, expectedAnnual: Math.round(currentAnnual * (1 + hikePercent / 100)), fitThreshold, scheduledAutoApply });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 function inferResumeTemplate(entry) {
   if (entry.resume_template) return entry.resume_template;
