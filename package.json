@@ -14,6 +14,7 @@
     "login:hirist": "node index.js login hirist",
     "ollama:pull": "ollama pull qwen2.5-coder:14b",
     "dashboard": "next dev dashboard --webpack",
+    "mcp:leetcode": "node leetcode-mcp/server.js",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "java:build": "node scripts/java-maven.js package",
@@ -25,6 +26,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@prisma/client": "^6.19.3",
     "@tailwindcss/postcss": "^4.3.0",
     "better-sqlite3": "^11.8.1",

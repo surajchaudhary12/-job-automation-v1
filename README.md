@@ -39,7 +39,10 @@ npm run live -- --limit=25
 npm run scheduler
 npm run backend
 npm run dashboard
+npm run mcp:leetcode
 ```
+
+The optional LeetCode MCP server exposes read-only problem and public profile tools over stdio. See [leetcode-mcp/README.md](leetcode-mcp/README.md) for its tools and Codex configuration.
 
 ## Login Sessions
 
@@ -72,11 +75,12 @@ JSON compatibility remains available through `tracker/applications.json`.
 
 The default flow does not submit applications. It prepares the page and pauses for human review.
 
-Auto-submit remains disabled unless all of these are true:
+The scheduler runs discovery every 15 minutes. Enable **Scheduled auto-apply** in the dashboard's Application preferences to let it submit jobs that pass the configured score, compensation, role-fit, and supported-ATS checks. Keep this setting off for discovery-only runs. CAPTCHA checks and unanswered required questions stop for human review.
 
-- `AUTO_SUBMIT=true`
+An application can be submitted only when auto-apply is explicitly enabled (in dashboard preferences or with both `LIVE_APPLY=true` and `AUTO_SUBMIT=true`) and all of these checks pass:
+
 - supported ATS
-- confidence >= 8.5
+- fit score meets the threshold set in Application preferences
 - low-risk form
 
 ## Deployment
