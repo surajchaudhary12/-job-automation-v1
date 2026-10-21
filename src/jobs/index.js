@@ -1,6 +1,7 @@
 const { readJson } = require("../config");
 const { discoverGreenhouse } = require("./greenhouse");
 const { discoverLever } = require("./lever");
+const { discoverAshby } = require("./ashby");
 const { discoverWellfound } = require("./wellfound");
 const { discoverLinkedIn } = require("./linkedin");
 const { discoverInstahyre } = require("./instahyre");
@@ -12,7 +13,12 @@ function dedupeJobs(jobs) {
   const seen = new Set();
   const output = [];
   for (const job of jobs) {
-    const key = `${job.source}:${job.url || job.company + job.title}`.toLowerCase();
+    let canonicalUrl = job.url || "";
+    try {
+      const parsed = new URL(canonicalUrl);
+      canonicalUrl = `${parsed.origin}${parsed.pathname}`;
+    } catch {}
+    const key = `${job.source}:${canonicalUrl || job.company + job.title}`.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     output.push(job);
@@ -20,15 +26,39 @@ function dedupeJobs(jobs) {
   return output;
 }
 
+function limitJobsFairly(jobs, limit) {
+  const bySource = new Map();
+  for (const job of jobs) {
+    const source = String(job.source || "unknown").toLowerCase();
+    if (!bySource.has(source)) bySource.set(source, []);
+    bySource.get(source).push(job);
+  }
+  const selected = [];
+  while (selected.length < limit) {
+    let added = false;
+    for (const sourceJobs of bySource.values()) {
+      if (sourceJobs.length && selected.length < limit) {
+        selected.push(sourceJobs.shift());
+        added = true;
+      }
+    }
+    if (!added) break;
+  }
+  return selected;
+}
+
 async function discoverJobs(options = {}) {
   const sources = readJson("config/job_sources.json");
   const all = [];
 
   // ATS boards are simple HTTP fetches, no browser needed
-  all.push(...await discoverGreenhouse(options.greenhouse_boards || sources.greenhouse_boards));
-  all.push(...await discoverLever(options.lever_companies || sources.lever_companies));
+  if (options.includeAts !== false) {
+    all.push(...await discoverGreenhouse(options.greenhouse_boards || sources.greenhouse_boards));
+    all.push(...await discoverLever(options.lever_companies || sources.lever_companies));
+    all.push(...await discoverAshby(options.ashby_boards || sources.ashby_boards || []));
+  }
   
-  const queries = sources.queries || ["backend engineer"];
+  const queries = options.queries || sources.queries || ["backend engineer"];
   const limitPerQuery = 10;
 
   // Platform-first discovery to minimize browser launches
@@ -39,7 +69,9 @@ async function discoverJobs(options = {}) {
     { name: "hirist", discover: discoverHirist }
   ];
 
+  const selectedPlatforms = options.platforms ? new Set(options.platforms) : null;
   for (const platform of platforms) {
+    if (selectedPlatforms && !selectedPlatforms.has(platform.name)) continue;
     if (!process.env.LIVE_BROWSER_DISCOVERY) continue;
 
     log("discovery.platform.start", { platform: platform.name });
@@ -63,7 +95,7 @@ async function discoverJobs(options = {}) {
     }
   }
 
-  return dedupeJobs(all).slice(0, options.limit || 50);
+  return limitJobsFairly(dedupeJobs(all), options.limit || 50);
 }
 
 module.exports = { discoverJobs };

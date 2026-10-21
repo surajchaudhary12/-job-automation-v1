@@ -26,6 +26,9 @@
     "airtable",
     "slack"
   ],
+  "ashby_boards": [
+    "anyscale"
+  ],
   "locations": ["Bangalore", "Gurgaon", "Remote"],
   "queries": [
     "backend engineer",

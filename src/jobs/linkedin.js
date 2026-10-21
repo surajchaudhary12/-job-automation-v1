@@ -144,6 +144,13 @@ async function discoverLinkedIn({
         }, {index: i, sel: cardSelectors});
 
         if (jobData && jobData.url) {
+          // LinkedIn's fallback selectors can return the entire card text as a
+          // title. The first non-empty line is the job title; later lines are
+          // duplicate labels, company, location, and badges.
+          jobData.title = String(jobData.title || "")
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .find(Boolean) || "Unknown Title";
           log("linkedin.extraction.success", { company: jobData.company, title: jobData.title });
           extractedJobs.push(jobData);
         }
